@@ -1,20 +1,25 @@
-import { authenticate } from "../shopify.server";
+import crypto from "crypto";
 
 export const action = async ({ request }) => {
-  try {
-    const { topic, shop } = await authenticate.webhook(request);
-    console.log(`Received ${topic} webhook for ${shop}`);
-    switch (topic) {
-      case "CUSTOMERS_DATA_REQUEST":
-      case "CUSTOMERS_REDACT":
-      case "SHOP_REDACT":
-        break;
-      default:
-        throw new Response("Unhandled webhook topic", { status: 404 });
-    }
-    return new Response(null, { status: 200 });
-  } catch (error) {
-    if (error instanceof Response) throw error;
+  const hmacHeader = request.headers.get("X-Shopify-Hmac-Sha256");
+  const body = await request.text();
+
+  const secret = process.env.SHOPIFY_API_SECRET;
+  if (!secret || !hmacHeader) {
     return new Response("Unauthorized", { status: 401 });
   }
+
+  const generatedHash = crypto
+    .createHmac("sha256", secret)
+    .update(body, "utf8")
+    .digest("base64");
+
+  if (generatedHash !== hmacHeader) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
+  const topic = request.headers.get("X-Shopify-Topic");
+  console.log(`Received ${topic} webhook`);
+
+  return new Response(null, { status: 200 });
 };
