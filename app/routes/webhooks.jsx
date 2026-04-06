@@ -14,7 +14,13 @@ export const action = async ({ request }) => {
     .update(body, "utf8")
     .digest("base64");
 
-  if (generatedHash !== hmacHeader) {
+  const generatedBuffer = Buffer.from(generatedHash, "utf8");
+  const headerBuffer = Buffer.from(hmacHeader, "utf8");
+
+  if (
+    generatedBuffer.length !== headerBuffer.length ||
+    !crypto.timingSafeEqual(generatedBuffer, headerBuffer)
+  ) {
     return new Response("Unauthorized", { status: 401 });
   }
 
